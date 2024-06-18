@@ -46,11 +46,13 @@
       </div>
     </div>
     <div>
+      <TransactionModal v-model="isOpen" @saved="refreshTransactions()" />
       <UButton
         icon="i-heroicons-plus-circle"
         color="white"
         variant="solid"
         label="Add"
+        @click="isOpen = true"
       />
     </div>
   </section>
@@ -78,11 +80,12 @@
 import { transactionViewOptions } from '~/constants';
 const selectedView = ref(transactionViewOptions[1]);
 
-//Conecting database
+//Connecting database
 const supabase = useSupabaseClient();
 
 const transactions = ref([]);
 const isLoading = ref(false);
+const isOpen = ref(false);
 
 //separating incomes from expenses and sum them all
 const income = computed(() =>
@@ -107,7 +110,10 @@ const fetchTransactions = async () => {
   isLoading.value = true;
   try {
     const { data } = await useAsyncData('transactions', async () => {
-      const { data, error } = await supabase.from('transactions').select();
+      const { data, error } = await supabase
+        .from('transactions')
+        .select()
+        .order('created_at', { ascending: false });
       if (error) return [];
 
       return data;
@@ -133,6 +139,12 @@ const transactionsGroupByDate = computed(() => {
     }
     grouped[date].push(transaction);
   }
+  // const sortedKeys = Object.keys(grouped).sort().reverse();
+  // const sortedGrouped = {};
+  // for (const key in sortedKeys) {
+  //   sortedGrouped[key] = grouped[key];
+  // }
+  // return sortedGrouped;
 
   return grouped;
 });
