@@ -12,29 +12,29 @@
       color="green"
       title="Income"
       :amount="incomeTotal"
-      :last-amount="3000"
-      :loading="isLoading"
+      :last-amount="prevIncomeTotal"
+      :loading="pending"
     />
     <Trend
       color="red"
       title="Expenses"
       :amount="expenseTotal"
-      :last-amount="5000"
-      :loading="isLoading"
+      :last-amount="prevExpenseTotal"
+      :loading="pending"
     />
     <Trend
       color="green"
       title="Investments"
       :amount="4000"
       :last-amount="3000"
-      :loading="isLoading"
+      :loading="pending"
     />
     <Trend
       color="red"
       title="Savings"
       :amount="4000"
       :last-amount="4100"
-      :loading="isLoading"
+      :loading="pending"
     />
   </section>
   <section class="flex justify-between mb-10">
@@ -46,7 +46,7 @@
       </div>
     </div>
     <div>
-      <TransactionModal v-model="isOpen" @saved="refreshTransactions()" />
+      <TransactionModal v-model="isOpen" @saved="refresh()" />
       <UButton
         icon="i-heroicons-plus-circle"
         color="white"
@@ -56,18 +56,14 @@
       />
     </div>
   </section>
-  <section v-if="!isLoading">
-    <div
-      v-for="(transactionsOnDay, date) in transactionsGroupByDate"
-      :key="date"
-      class="mb-10"
-    >
+  <section v-if="!pending">
+    <div v-for="(transactionsOnDay, date) in byDate" :key="date" class="mb-10">
       <DailyTransactionSummary :date="date" :transactions="transactionsOnDay" />
       <Transaction
         v-for="transaction in transactionsOnDay"
         :key="transaction.id"
         :transaction="transaction"
-        @deleted="refreshTransactions()"
+        @deleted="refresh()"
       />
     </div>
   </section>
@@ -78,74 +74,28 @@
 
 <script setup>
 import { transactionViewOptions } from '~/constants';
+
 const selectedView = ref(transactionViewOptions[1]);
-
-//Connecting database
-const supabase = useSupabaseClient();
-
-const transactions = ref([]);
-const isLoading = ref(false);
 const isOpen = ref(false);
 
-//separating incomes from expenses and sum them all
-const income = computed(() =>
-  transactions.value.filter((t) => t.type === 'Income')
-);
-const expense = computed(() =>
-  transactions.value.filter((t) => t.type === 'Expense')
-);
+const { current, previous } = useSelectedTimePeriod(selectedView);
 
-const incomeCount = computed(() => income.value.length);
-const expenseCount = computed(() => expense.value.length);
+const {
+  pending,
+  refresh,
+  transactions: {
+    incomeCount,
+    expenseCount,
+    incomeTotal,
+    expenseTotal,
+    grouped: { byDate },
+  },
+} = useFetchTransactions(current);
 
-const incomeTotal = computed(() =>
-  income.value.reduce((sum, transaction) => sum + transaction.amount, 0)
-);
-const expenseTotal = computed(() =>
-  expense.value.reduce((sum, transaction) => sum + transaction.amount, 0)
-);
-
-//Fetching transactions from db
-const fetchTransactions = async () => {
-  isLoading.value = true;
-  try {
-    const { data } = await useAsyncData('transactions', async () => {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select()
-        .order('created_at', { ascending: false });
-      if (error) return [];
-
-      return data;
-    });
-    return data.value;
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-//Refreshing transactions after deleted
-const refreshTransactions = async () =>
-  (transactions.value = await fetchTransactions());
-await refreshTransactions();
-
-//Grouping transactions by date
-const transactionsGroupByDate = computed(() => {
-  let grouped = {};
-  for (const transaction of transactions.value) {
-    const date = new Date(transaction.created_at).toISOString().split('T')[0];
-    if (!grouped[date]) {
-      grouped[date] = [];
-    }
-    grouped[date].push(transaction);
-  }
-  // const sortedKeys = Object.keys(grouped).sort().reverse();
-  // const sortedGrouped = {};
-  // for (const key in sortedKeys) {
-  //   sortedGrouped[key] = grouped[key];
-  // }
-  // return sortedGrouped;
-
-  return grouped;
-});
+const {
+  transactions: {
+    incomeTotal: prevIncomeTotal,
+    expenseTotal: prevExpenseTotal,
+  },
+} = useFetchTransactions(previous);
 </script>
